@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>売上実績表示（10桁・音声対応）</title>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700&display=swap" rel="stylesheet">
+    
+    <style>
+        /* * CSS: サイトの見た目を整えます 
+         */
+        body {
+            background-color: #222;
+            color: white;
+            font-family: 'Meiryo', sans-serif;
+            text-align: center;
+            padding-top: 50px;
+        }
+        /* 鑑定板 */
+        #price-board {
+            background-color: #000;
+            border: 5px solid #555;
+            border-radius: 10px;
+            padding: 20px;
+            display: inline-block;
+            margin-top: 20px;
+            white-space: nowrap; 
+            overflow-x: auto; /* スマホで見切れる場合スクロール */
+        }
+        /* 「￥」や「円」 */
+        .label {
+            font-size: 2rem;
+            color: #ccc;
+            vertical-align: middle;
+        }
+        /* 「十億」「一億」などの位 */
+        .place {
+            font-size: 1rem;
+            color: #888;
+            display: block;
+        }
+        /* 各桁のグループ */
+        .digit-group {
+            display: inline-block;
+            margin: 0 5px;
+            min-width: 50px;
+            text-align: center;
+        }
+        /* 「万」と「億」の区切りを少し空ける */
+        .separator-man { margin-right: 15px; }
+        .separator-oku { margin-right: 15px; }
+
+        /* 数字 */
+        .digit {
+            font-family: 'Orbitron', sans-serif; /* デジタル風フォント */
+            font-size: 3.5rem;
+            color: #ff3333; /* 赤色 */
+            font-weight: 700;
+            opacity: 0; /* 最初は透明 */
+            transition: opacity 0.1s ease-in; /* フワッと表示 */
+        }
+        /* 入力欄とボタン */
+        .controls { margin: 20px; }
+        #salesInput { font-size: 1.2rem; padding: 5px; }
+        #revealButton { font-size: 1.2rem; padding: 5px 15px; font-weight: bold; cursor: pointer; }
+    </style>
+</head>
+<body>
+
+    <h2>先月の売上実績</h2>
+
+    <div class="controls">
+        <input type="number" id="salesInput" placeholder="金額（半角数字）を入力">
+        <button id="revealButton">オープン・ザ・プライス！</button>
+    </div>
+
+    <div id="price-board">
+        <span class="label">￥</span>
+        
+        <span class="digit-group"><span class="place">十億</span><span id="d9" class="digit">0</span></span>
+        <span class="digit-group separator-oku"><span class="place">一億</span><span id="d8" class="digit">0</span></span>
+        <span class="digit-group"><span class="place">千万</span><span id="d7" class="digit">0</span></span>
+        <span class="digit-group"><span class="place">百万</span><span id="d6" class="digit">0</span></span>
+        <span class="digit-group"><span class="place">十万</span><span id="d5" class="digit">0</span></span>
+        <span class="digit-group separator-man"><span class="place">万</span><span id="d4" class="digit">0</span></span>
+        <span class="digit-group"><span class="place">千</span><span id="d3" class="digit">0</span></span>
+        <span class="digit-group"><span class="place">百</span><span id="d2" class="digit">0</span></span>
+        <span class="digit-group"><span class="place">十</span><span id="d1" class="digit">0</span></span>
+        <span class="digit-group"><span class="place">一</span><span id="d0" class="digit">0</span></span>
+        
+        <span class="label">円</span>
+    </div>
+
+    <audio id="sound-0" src="いち.mp3" preload="auto"></audio> <audio id="sound-1" src="じゅう.mp3" preload="auto"></audio> <audio id="sound-2" src="ひゃく.mp3" preload="auto"></audio> <audio id="sound-3" src="せん.mp3" preload="auto"></audio> <audio id="sound-4" src="まん.mp3" preload="auto"></audio> <audio id="sound-5" src="じゅうまん.mp3" preload="auto"></audio> <audio id="sound-6" src="ひゃくまん.mp3" preload="auto"></audio> <audio id="sound-7" src="せんまん.mp3" preload="auto"></audio> <audio id="sound-8" src="いちおく.mp3" preload="auto"></audio> <audio id="sound-9" src="じゅうおく.mp3" preload="auto"></audio> <script>
+        /*
+         * JavaScript: サイトの「仕組み」
+         */
+
+        // 1. 必要な部品（HTML要素）を取得する
+        const revealButton = document.getElementById('revealButton');
+        const salesInput = document.getElementById('salesInput');
+        
+        // 各桁の数字を表示する場所 (10桁分)
+        const digitElements = [
+            document.getElementById('d0'), // 一
+            document.getElementById('d1'), // 十
+            document.getElementById('d2'), // 百
+            document.getElementById('d3'), // 千
+            document.getElementById('d4'), // 万
+            document.getElementById('d5'), // 十万
+            document.getElementById('d6'), // 百万
+            document.getElementById('d7'), // 千万
+            document.getElementById('d8'), // 一億
+            document.getElementById('d9')  // 十億
+        ];
+
+        // 各桁の音声を再生する場所 (10個分)
+        const audioElements = [
+            document.getElementById('sound-0'),
+            document.getElementById('sound-1'),
+            document.getElementById('sound-2'),
+            document.getElementById('sound-3'),
+            document.getElementById('sound-4'),
+            document.getElementById('sound-5'),
+            document.getElementById('sound-6'),
+            document.getElementById('sound-7'),
+            document.getElementById('sound-8'),
+            document.getElementById('sound-9')
+        ];
+        
+        // 実行中かどうかを管理するフラグ
+        let isRunning = false;
+
+        // 2. ボタンが押されたときの処理
+        revealButton.addEventListener('click', () => {
+            // 既に実行中の場合は何もしない
+            if (isRunning) return;
+
+            const amount = salesInput.value;
+            
+            // 入力値が10桁を超えていないかチェック
+            if (amount.length > 10) {
+                alert('金額は10桁（十億の位）まで入力してください。');
+                return;
+            }
+            if (amount && amount >= 0) {
+                // 実行中はボタンを無効化
+                isRunning = true;
+                revealButton.disabled = true;
+                startReveal(amount);
+            } else {
+                alert('0以上の金額を入力してください');
+            }
+        });
+
+        // 3. 金額を順に表示するメインの関数
+        function startReveal(amount) {
+            // 一度すべての数字をリセット（非表示に）
+            digitElements.forEach(el => {
+                el.textContent = '0';
+                el.style.opacity = 0; // 透明にする
+            });
+
+            // 10桁になるよう、左側を '0' で埋める
+            const amountString = String(amount).padStart(10, '0');
+            
+            // 文字列を逆順にする (一の位から処理するため)
+            const digits = amountString.split('').reverse();
+
+            let index = 0; // 0 = 一の位からスタート
+            
+            // 音声の長さに合わせて調整（ミリ秒）
+            // 「じゅうまん」「ひゃくまん」などが長いため、余裕を持たせる
+            const revealDelay = 800; 
+
+            function showNextDigit() {
+                if (index >= digits.length) {
+                    // 10桁表示したらボタンを再度有効化
+                    isRunning = false;
+                    revealButton.disabled = false;
+                    return; 
+                }
+
+                // 該当する桁の数字を表示
+                digitElements[index].textContent = digits[index];
+                digitElements[index].style.opacity = 1;
+
+                // 該当する「位」の音声を再生
+                const soundToPlay = audioElements[index];
+                if (soundToPlay) {
+                    soundToPlay.currentTime = 0; // 再生位置を最初に戻す
+                    soundToPlay.play().catch(e => console.error("音声の再生に失敗しました:", e));
+                }
+
+                index++; // 次の桁へ
+
+                // 'revealDelay'ミリ秒後に、再びこの関数を呼び出す
+                setTimeout(showNextDigit, revealDelay);
+            }
+
+            // 最初の1桁（一の位）の表示を開始する
+            showNextDigit();
+        }
+    </script>
+
+</body>
+</html>
